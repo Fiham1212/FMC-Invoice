@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fresh Made Cake POS</title>
+<style>
+    body { font-family: 'Comic Sans MS', cursive, sans-serif; background: #fff0f5; padding: 20px; }
+    h2 { color: #e84393; text-align: center; }
+    label { font-weight: bold; margin-right: 5px; }
+    input, select, button { padding: 6px; margin: 4px 0; border-radius: 5px; border: 1px solid #ccc; }
+    button { background-color: #e84393; color: white; cursor: pointer; }
+    button:hover { background-color: #d6307a; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #fff0f5; }
+    th, td { border: 1px solid #e84393; padding: 8px; text-align: left; }
+    th { background-color: #fd79a8; color: white; }
+    #grandTotal { color: #e84393; font-weight: bold; font-size: 1.2em; }
+    #invoice { background: #ffe4e1; padding: 20px; margin-top: 20px; border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<h2>🍰 Fresh Made Cake POS 🍰</h2>
+
+<div>
+    <label>Customer Name:</label>
+    <input type="text" id="customerName" placeholder="Enter name">
+    <label>Phone:</label>
+    <input type="text" id="customerPhone" placeholder="Enter phone">
+    <label>Payment:</label>
+    <select id="paymentType">
+        <option value="Cash">Cash</option>
+        <option value="Credit">Credit</option>
+        <option value="Online Transfer">Online Transfer</option>
+    </select>
+</div>
+
+<hr>
+
+<h3>Add Items</h3>
+<div>
+    <label>Item:</label>
+    <input type="text" id="itemName" placeholder="Cake Name">
+    <label>Quantity:</label>
+    <input type="number" id="itemQty" min="1" value="1">
+    <label>Price (LKR):</label>
+    <input type="number" id="itemPrice" min="0" value="0">
+    <button onclick="addItem()">Add Item</button>
+</div>
+
+<table id="cartTable">
+    <thead>
+        <tr>
+            <th>Item</th><th>Qty</th><th>Price (LKR)</th><th>Total (LKR)</th><th>Action</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<h3>Total: <span id="grandTotal">LKR 0</span></h3>
+
+<button onclick="generateExcel()">Download Excel</button>
+<button onclick="generatePDF()">Download PDF Invoice</button>
+
+<div id="invoice" style="display:none;"></div>
+
+<!-- Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<script>
+let cart = [];
+
+function addItem() {
+    const name = document.getElementById('itemName').value;
+    const qty = Number(document.getElementById('itemQty').value);
+    const price = Number(document.getElementById('itemPrice').value);
+    if(!name || qty<=0 || price<0) { alert("Enter valid item"); return; }
+    cart.push({name, qty, price, total: qty*price});
+    updateCart();
+    // Clear input fields
+    document.getElementById('itemName').value = '';
+    document.getElementById('itemQty').value = 1;
+    document.getElementById('itemPrice').value = 0;
+}
+
+function removeItem(index) {
+    cart.splice(index,1);
+    updateCart();
+}
+
+function updateCart() {
+    const tbody = document.querySelector('#cartTable tbody');
+    tbody.innerHTML = '';
+    let grandTotal = 0;
+    cart.forEach((item, i) => {
+        grandTotal += item.total;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${item.name}</td><td>${item.qty}</td><td>LKR ${item.price.toLocaleString()}</td><td>LKR ${item.total.toLocaleString()}</td>
+                        <td><button onclick="removeItem(${i})">Remove</button></td>`;
+        tbody.appendChild(tr);
+    });
+    document.getElementById('grandTotal').innerText = 'LKR ' + grandTotal.toLocaleString();
+}
+
+function generateExcel() {
+    if(cart.length==0) { alert("Add items first"); return; }
+    const customerName = document.getElementById('customerName').value || "Unknown";
+    const payment = document.getElementById('paymentType').value;
+    const date = new Date().toLocaleString();
+
+    const data = cart.map(item=>({
+        Customer: customerName,
+        Payment: payment,
+        Date: date,
+        Item: item.name,
+        Quantity: item.qty,
+        Price_LKR: item.price,
+        Total_LKR: item.total
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, "Transactions");
+    XLSX.writeFile(wb, `Transactions_${customerName}_${Date.now()}.xlsx`);
+}
+
+function generatePDF() {
+    if(cart.length==0) { alert("Add items first"); return; }
+    const customerName = document.getElementById('customerName').value || "Unknown";
+    const payment = document.getElementById('paymentType').value;
+    const date = new Date().toLocaleString();
+
+    let html = `<h2 style="color:#e84393;">🍰 Fresh Made Cake 🍰</h2>
+    <p><b>Customer:</b> ${customerName}<br><b>Payment:</b> ${payment}<br><b>Date:</b> ${date}</p>
+    <table border="1" style="border-collapse: collapse; width:100%; background:#fff0f5;">
+        <tr style="background:#fd79a8; color:white;"><th>Item</th><th>Qty</th><th>Price (LKR)</th><th>Total (LKR)</th></tr>`;
+    cart.forEach(i=>{ html += `<tr><td>${i.name}</td><td>${i.qty}</td><td>LKR ${i.price.toLocaleString()}</td><td>LKR ${i.total.toLocaleString()}</td></tr>` });
+    html += `<tr><td colspan="3"><b>Grand Total</b></td><td>LKR ${cart.reduce((a,b)=>a+b.total,0).toLocaleString()}</td></tr></table>`;
+
+    const invoiceDiv = document.getElementById('invoice');
+    invoiceDiv.style.display = 'block';
+    invoiceDiv.innerHTML = html;
+
+    html2pdf().from(invoiceDiv).save(`${customerName}_${new Date().toISOString().slice(0,10)}.pdf`);
+
+    // Clear cart after PDF generation
+    cart = [];
+    updateCart();
+}
+</script>
+</body>
+</html>
